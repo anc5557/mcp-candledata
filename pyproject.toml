@@ -1,0 +1,33 @@
+[project]
+name = "mcp-candledata"
+version = "0.1.0"
+description = "Model Context Protocol server that streams candle and indicator data."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Junho" }
+]
+dependencies = [
+    "modelcontextprotocol[http]>=0.1.3",
+    "pydantic>=2.7.0",
+    "pandas>=2.2.0",
+    "yfinance>=0.2.40",
+    "numpy>=1.26.0"
+]
+
+[project.urls]
+homepage = "https://github.com/junho/mcp-candledata"
+
+[project.scripts]
+mcp-candledata = "mcp_candledata.server:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
+
+[tool.uv.workspace]
+members = []
