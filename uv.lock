@@ -385,6 +385,7 @@ name = "mcp-candledata"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "httpx" },
     { name = "mcp", extra = ["cli"] },
     { name = "numpy" },
     { name = "pandas" },
@@ -394,6 +395,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.27.0" },
     { name = "mcp", extras = ["http", "cli"], specifier = ">=1.0.0b5" },
     { name = "numpy", specifier = ">=1.26.0" },
     { name = "pandas", specifier = ">=2.2.0" },

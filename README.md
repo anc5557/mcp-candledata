@@ -55,6 +55,49 @@ uv run mcp-candledata
 }
 ```
 
+### 요청 필드 상세
+
+- `symbol` | `ticker`: 조회할 종목 코드. 업비트 양식(`KRW-BTC`)을 쓰면 자동으로 `provider` 가 `upbit` 로 설정됩니다.
+- `provider`: `"yahoo"` 또는 `"upbit"`. 미지정 시 심볼을 기반으로 추론합니다.
+- `interval_minutes` | `interval`: 분 단위 정수 또는 `"5m"`, `"2h"`, `"1d"` 같은 문자열. 업비트는 규격에 맞는 값만 허용합니다.
+- `limit`: 최근 캔들 개수(기본 120, 최소 5, 최대 500). `start` 를 지정하면 우선순위가 낮아집니다.
+- `indicators`: `{ "name": "sma", "window": 20 }` 형태의 배열. `window` 를 생략하면 SMA/EMA는 20, RSI는 14, MACD는 (12, 26, 9), 볼린저 밴드는 20/2 표준편차로 계산됩니다.
+- `start` / `end`: UTC 타임스탬프 문자열 또는 ISO8601. 지정 시 해당 범위 안의 캔들만 반환하며, `end` 를 생략하면 현재 시각이 사용됩니다.
+
+### 응답 구조
+
+응답은 다음과 같은 `CandleDataResponse` JSON 구조입니다.
+
+```jsonc
+{
+  "symbol": "TSLA",
+  "interval_minutes": 5,
+  "candles": [
+    {
+      "timestamp": "2024-05-02T09:35:00Z",
+      "open": 175.21,
+      "high": 175.44,
+      "low": 174.91,
+      "close": 175.10,
+      "volume": 1023400.0
+    }
+  ],
+  "indicators": {
+    "sma": [
+      { "timestamp": "2024-05-02T09:35:00Z", "values": { "value": null } }
+    ],
+    "macd": [
+      {
+        "timestamp": "2024-05-02T09:35:00Z",
+        "values": { "macd": null, "signal": null, "histogram": null }
+      }
+    ]
+  }
+}
+```
+
+초기 구간처럼 계산이 성립하지 않는 지점은 `null` 로 채워집니다. 요청하지 않은 지표 키는 응답에 포함되지 않습니다.
+
 지원하는 보조지표 이름: `sma`, `ema`, `rsi`, `macd`, `bbands`
 
 응답에는 요청한 분봉에 맞춰 정렬된 최근 캔들과 각 보조지표의 시계열 데이터가 포함됩니다.
