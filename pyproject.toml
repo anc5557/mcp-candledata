@@ -9,7 +9,7 @@ authors = [
     { name = "Junho" }
 ]
 dependencies = [
-    "modelcontextprotocol[http]>=0.1.0",
+    "mcp[http,cli]>=1.0.0b5",
     "pydantic>=2.7.0",
     "pandas>=2.2.0",
     "yfinance>=0.2.40",

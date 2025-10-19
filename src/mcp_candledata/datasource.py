@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -126,11 +126,11 @@ def _row_to_candle(row: pd.Series) -> CandleRecord:
     timestamp = row.name.to_pydatetime()
     return CandleRecord(
         timestamp=timestamp,
-        open=float(row["Open"]),
-        high=float(row["High"]),
-        low=float(row["Low"]),
-        close=float(row["Close"]),
-        volume=float(row.get("Volume", np.nan)) if not pd.isna(row.get("Volume")) else 0.0,
+        open=_require_float(row["Open"]),
+        high=_require_float(row["High"]),
+        low=_require_float(row["Low"]),
+        close=_require_float(row["Close"]),
+        volume=_optional_float(row.get("Volume", np.nan)) or 0.0,
     )
 
 
@@ -179,7 +179,7 @@ def _series_to_points(
     points: List[IndicatorPoint] = []
     for ts, value in zip(index, series):
         timestamp = ts.to_pydatetime()
-        val = float(value) if pd.notna(value) else None
+        val = _optional_float(value)
         points.append(IndicatorPoint(timestamp=timestamp, values={labels[0]: val}))
     return points
 
@@ -194,9 +194,36 @@ def _multi_series_to_points(
         values = {}
         for label in labels:
             value = series_map[label].iloc[idx]
-            values[label] = float(value) if pd.notna(value) else None
+            values[label] = _optional_float(value)
         points.append(IndicatorPoint(timestamp=timestamp, values=values))
     return points
+
+
+def _extract_scalar(value: object) -> Optional[object]:
+    """Pandas가 반환하는 단일 원소 시리즈/배열을 스칼라로 변환."""
+    if isinstance(value, pd.Series):
+        if value.empty:
+            return None
+        return value.iloc[0]
+    if isinstance(value, np.ndarray):
+        if value.size == 0:
+            return None
+        return value.item()
+    return value
+
+
+def _require_float(value: object) -> float:
+    scalar = _extract_scalar(value)
+    if scalar is None or pd.isna(scalar):
+        raise CandleDataError("필수 가격 데이터에 결측치가 포함돼 있습니다.")
+    return float(scalar)
+
+
+def _optional_float(value: object) -> Optional[float]:
+    scalar = _extract_scalar(value)
+    if scalar is None or pd.isna(scalar):
+        return None
+    return float(scalar)
 
 
 def _sma(series: pd.Series, window: int) -> pd.Series:

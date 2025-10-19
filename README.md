@@ -29,8 +29,8 @@ uv run mcp-candledata
 `get_candle_data` 는 다음과 같은 JSON 입력을 받습니다.
 ```jsonc
 {
-  "symbol": "TSLA",
-  "interval_minutes": 5,
+  "ticker": "TSLA",              // alias: "symbol"
+  "interval": "5m",              // alias: "interval_minutes"
   "limit": 120,
   "indicators": [
     { "name": "sma", "window": 20 },
@@ -38,6 +38,8 @@ uv run mcp-candledata
   ]
 }
 ```
+
+`symbol`/`interval_minutes` 필드 이름과 정수 분 단위 입력도 그대로 지원합니다.
 
 지원하는 보조지표 이름: `sma`, `ema`, `rsi`, `macd`, `bbands`
 

@@ -6,7 +6,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
 
 
 class IndicatorName(str, Enum):
@@ -34,9 +34,16 @@ class IndicatorSpec(BaseModel):
 class CandleDataRequest(BaseModel):
     """Input model for the get_candle_data tool."""
 
-    symbol: str = Field(..., description="Ticker symbol supported by Yahoo Finance.")
+    symbol: str = Field(
+        ...,
+        description="Ticker symbol supported by Yahoo Finance.",
+        validation_alias=AliasChoices("symbol", "ticker"),
+    )
     interval_minutes: int = Field(
-        ..., gt=0, description="Candle interval in minutes (e.g. 1, 5, 15, 60)."
+        ...,
+        gt=0,
+        description="Candle interval in minutes (e.g. 1, 5, 15, 60).",
+        validation_alias=AliasChoices("interval_minutes", "interval"),
     )
     limit: int = Field(
         default=120,
@@ -62,6 +69,25 @@ class CandleDataRequest(BaseModel):
         if self.start and self.end and self.start >= self.end:
             raise ValueError("start must be earlier than end")
         return self
+
+    @field_validator("interval_minutes", mode="before")
+    @classmethod
+    def _coerce_interval(cls, value: int | str) -> int | str:
+        if isinstance(value, str):
+            cleaned = value.strip().lower()
+            if cleaned.endswith("m"):
+                return int(cleaned[:-1])
+            if cleaned.endswith("h"):
+                return int(cleaned[:-1]) * 60
+            if cleaned.endswith("d"):
+                return int(cleaned[:-1]) * 1440
+            if cleaned.isdigit():
+                return int(cleaned)
+            raise ValueError(
+                "interval must be provided as minutes (e.g. 5) or duration string "
+                "like '5m', '2h', or '1d'"
+            )
+        return value
 
 
 class CandleRecord(BaseModel):

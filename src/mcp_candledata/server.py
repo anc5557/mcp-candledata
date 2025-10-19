@@ -7,21 +7,17 @@ import logging
 import os
 from typing import Any, Dict, Optional
 
-from modelcontextprotocol.server import Server
-from modelcontextprotocol.server.http import HTTPServerTransport
+from mcp.server.fastmcp import FastMCP
 
 from .datasource import CandleDataError, fetch_and_prepare
 from .schemas import CandleDataRequest
 
 LOGGER = logging.getLogger("mcp_candledata")
 
-server = Server("mcp-candledata")
+mcp = FastMCP("mcp-candledata")
 
 
-@server.tool(
-    name="get_candle_data",
-    description="Fetch OHLCV candles and technical indicator values for a symbol.",
-)
+@mcp.tool()
 async def get_candle_data(payload: Dict[str, Any]) -> Dict[str, Any]:
     """MCP tool handler invoked by the runtime."""
     request = CandleDataRequest.model_validate(payload)
@@ -39,7 +35,7 @@ def run(
     port: Optional[int] = None,
     enable_streaming: Optional[bool] = None,
 ) -> None:
-    """Start the MCP HTTP server."""
+    """Start the MCP HTTP server (FastMCP streamable-http)."""
     logging.basicConfig(level=logging.INFO)
 
     resolved_host = host or os.getenv("MCP_CANDLEDATA_HOST", "0.0.0.0")
@@ -50,16 +46,15 @@ def run(
         else os.getenv("MCP_CANDLEDATA_STREAMING", "1") != "0"
     )
 
-    transport = HTTPServerTransport(
-        host=resolved_host, port=resolved_port, enable_streaming=resolved_streaming
-    )
+    # FastMCP uses json_response to disable SSE streaming
+    json_response = not resolved_streaming
 
-    if hasattr(server, "run"):
-        server.run(transport)
-    elif hasattr(server, "serve"):
-        asyncio.run(server.serve(transport))
-    else:
-        raise RuntimeError("modelcontextprotocol Server does not expose run/serve helpers")
+    # Configure runtime settings
+    mcp.settings.host = resolved_host
+    mcp.settings.port = resolved_port
+    mcp.settings.json_response = json_response
+
+    mcp.run(transport="streamable-http")
 
 
 if __name__ == "__main__":
