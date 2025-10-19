@@ -30,6 +30,7 @@ uv run mcp-candledata
 ```jsonc
 {
   "ticker": "TSLA",              // alias: "symbol"
+  "provider": "yahoo",           // alias: "source", "vendor", "exchange" (기본값 auto)
   "interval": "5m",              // alias: "interval_minutes"
   "limit": 120,
   "indicators": [
@@ -40,6 +41,19 @@ uv run mcp-candledata
 ```
 
 `symbol`/`interval_minutes` 필드 이름과 정수 분 단위 입력도 그대로 지원합니다.
+
+가상화폐(업비트) 시세를 조회하고 싶다면 `provider` 를 `"upbit"` 으로 지정하거나
+티커를 `KRW-BTC`, `USDT-ETH` 처럼 업비트 마켓 코드 형식으로 전달하세요.
+지원 간격은 업비트 REST API 규격(분봉: 1/3/5/10/15/30/60/240, 일봉: 1d)에 맞춰집니다.
+예시:
+```json
+{
+  "symbol": "KRW-BTC",
+  "provider": "upbit",
+  "interval": 1,
+  "limit": 100
+}
+```
 
 지원하는 보조지표 이름: `sma`, `ema`, `rsi`, `macd`, `bbands`
 

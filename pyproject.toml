@@ -10,6 +10,7 @@ authors = [
 ]
 dependencies = [
     "mcp[http,cli]>=1.0.0b5",
+    "httpx>=0.27.0",
     "pydantic>=2.7.0",
     "pandas>=2.2.0",
     "yfinance>=0.2.40",

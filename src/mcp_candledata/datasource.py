@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Iterable, List, Optional
 
+import httpx
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -16,6 +17,7 @@ from .schemas import (
     IndicatorPoint,
     IndicatorSpec,
     CandleDataResponse,
+    DataProvider,
 )
 
 
@@ -39,16 +41,23 @@ _MINUTE_TO_YF_INTERVAL: Dict[int, str] = {
     1440: "1d",
 }
 
+_UPBIT_BASE_URL = "https://api.upbit.com"
+_UPBIT_MAX_BATCH = 200
+_UPBIT_MINUTE_INTERVALS = {1, 3, 5, 10, 15, 30, 60, 240}
+
 
 def fetch_and_prepare(request: CandleDataRequest) -> CandleDataResponse:
     """Fetch raw candles, compute indicators, and produce a response payload."""
 
-    interval = _resolve_interval(request.interval_minutes)
-    df = _download_candles(request.symbol, interval, request)
+    if request.provider == DataProvider.UPBIT:
+        df = _download_upbit_candles(request)
+    else:
+        interval = _resolve_yahoo_interval(request.interval_minutes)
+        df = _download_candles(request.symbol, interval, request)
     if df.empty:
         raise CandleDataError(
             f"No candle data returned for symbol '{request.symbol}' "
-            f"with interval '{interval}'."
+            f"with provider '{getattr(request.provider, 'value', request.provider)}'."
         )
 
     df = df.sort_index()
@@ -65,7 +74,7 @@ def fetch_and_prepare(request: CandleDataRequest) -> CandleDataResponse:
     )
 
 
-def _resolve_interval(minutes: int) -> str:
+def _resolve_yahoo_interval(minutes: int) -> str:
     try:
         return _MINUTE_TO_YF_INTERVAL[minutes]
     except KeyError as exc:
@@ -102,6 +111,108 @@ def _download_candles(
     else:
         data.index = pd.DatetimeIndex(index).tz_localize(timezone.utc)
     return data
+
+
+def _download_upbit_candles(request: CandleDataRequest) -> pd.DataFrame:
+    """Retrieve OHLCV candles from the Upbit public REST API."""
+
+    path, step = _resolve_upbit_interval(request.interval_minutes)
+    url_path = f"/v1/candles/{path}"
+    market = request.symbol.strip().upper()
+    start_bound = _ensure_timezone(request.start) if request.start else None
+    end_bound = _ensure_timezone(request.end) if request.end else None
+    cursor = end_bound
+    rows: List[Dict[str, object]] = []
+
+    with httpx.Client(base_url=_UPBIT_BASE_URL, timeout=10.0) as client:
+        while True:
+            if start_bound is None and len(rows) >= request.limit:
+                break
+            if start_bound is not None and rows:
+                earliest = _parse_upbit_timestamp(rows[-1]["candle_date_time_utc"])
+                if earliest <= start_bound:
+                    break
+
+            if start_bound is None:
+                remaining = request.limit - len(rows)
+                if remaining <= 0:
+                    break
+                count = min(_UPBIT_MAX_BATCH, remaining)
+            else:
+                count = _UPBIT_MAX_BATCH
+
+            params: Dict[str, object] = {"market": market, "count": count}
+            if cursor is not None:
+                params["to"] = _format_upbit_datetime(cursor)
+
+            try:
+                response = client.get(url_path, params=params)
+                response.raise_for_status()
+            except httpx.HTTPError as exc:
+                raise CandleDataError(
+                    f"Failed to download candles from Upbit for '{market}' "
+                    f"({request.interval_minutes} minute interval)."
+                ) from exc
+
+            batch = response.json()
+            if not batch:
+                break
+
+            rows.extend(batch)
+            oldest = batch[-1]
+            oldest_dt = _parse_upbit_timestamp(oldest["candle_date_time_utc"])
+            if start_bound is not None and oldest_dt <= start_bound:
+                break
+            cursor = oldest_dt - step
+
+    if not rows:
+        return pd.DataFrame()
+
+    frame = pd.DataFrame(rows)
+    frame = frame.drop_duplicates(subset="candle_date_time_utc", keep="first")
+    frame["timestamp"] = frame["candle_date_time_utc"].map(_parse_upbit_timestamp)
+    frame = frame.set_index("timestamp").sort_index()
+
+    if start_bound:
+        frame = frame[frame.index >= start_bound]
+    if end_bound:
+        frame = frame[frame.index <= end_bound]
+
+    renamed = frame.rename(
+        columns={
+            "opening_price": "Open",
+            "high_price": "High",
+            "low_price": "Low",
+            "trade_price": "Close",
+            "candle_acc_trade_volume": "Volume",
+        }
+    )
+    columns = ["Open", "High", "Low", "Close", "Volume"]
+    return renamed[columns]
+
+
+def _resolve_upbit_interval(minutes: int) -> tuple[str, timedelta]:
+    if minutes in _UPBIT_MINUTE_INTERVALS:
+        return f"minutes/{minutes}", timedelta(minutes=minutes)
+    if minutes == 1440:
+        return "days", timedelta(days=1)
+    raise CandleDataError(
+        "Upbit supports minute intervals "
+        f"{sorted(_UPBIT_MINUTE_INTERVALS)} or daily candles (1440 minutes)."
+    )
+
+
+def _format_upbit_datetime(ts: datetime) -> str:
+    utc = _ensure_timezone(ts).astimezone(timezone.utc)
+    trimmed = utc.replace(microsecond=0)
+    return trimmed.isoformat().replace("+00:00", "Z")
+
+
+def _parse_upbit_timestamp(value: str) -> datetime:
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 def _infer_period(interval_minutes: int, limit: int) -> str:

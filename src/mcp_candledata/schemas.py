@@ -19,6 +19,13 @@ class IndicatorName(str, Enum):
     BBANDS = "bbands"
 
 
+class DataProvider(str, Enum):
+    """Available market data vendors."""
+
+    YAHOO = "yahoo"
+    UPBIT = "upbit"
+
+
 class IndicatorSpec(BaseModel):
     """Indicator configuration payload."""
 
@@ -38,6 +45,11 @@ class CandleDataRequest(BaseModel):
         ...,
         description="Ticker symbol supported by Yahoo Finance.",
         validation_alias=AliasChoices("symbol", "ticker"),
+    )
+    provider: Optional[DataProvider] = Field(
+        default=None,
+        description="Market data provider ('yahoo' for equities or 'upbit' for crypto).",
+        validation_alias=AliasChoices("provider", "source", "vendor", "exchange"),
     )
     interval_minutes: int = Field(
         ...,
@@ -68,6 +80,13 @@ class CandleDataRequest(BaseModel):
     def validate_time_range(self) -> "CandleDataRequest":
         if self.start and self.end and self.start >= self.end:
             raise ValueError("start must be earlier than end")
+        if self.provider is None:
+            guessed = (
+                DataProvider.UPBIT
+                if _looks_like_upbit_symbol(self.symbol)
+                else DataProvider.YAHOO
+            )
+            self.provider = guessed
         return self
 
     @field_validator("interval_minutes", mode="before")
@@ -88,6 +107,15 @@ class CandleDataRequest(BaseModel):
                 "like '5m', '2h', or '1d'"
             )
         return value
+
+
+def _looks_like_upbit_symbol(symbol: str) -> bool:
+    """Heuristically determine whether the ticker resembles an Upbit market code."""
+    market = symbol.strip().upper()
+    if "-" not in market:
+        return False
+    base, _quote = market.split("-", 1)
+    return base in {"KRW", "BTC", "USDT"}
 
 
 class CandleRecord(BaseModel):

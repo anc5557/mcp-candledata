@@ -8,8 +8,9 @@ The project exposes a Model Context Protocol (MCP) server that streams candle an
 - A small `main` runner starts an HTTP transport so the server can be tunnelled through solutions such as `ngrok`.
 
 ## Data access layer
-- `src/mcp_candledata/datasource.py` downloads OHLCV candles via `yfinance`.
-- Minute-resolution intervals (e.g. `1`, `5`, `15`) are mapped to Yahoo Finance interval strings.
+- `src/mcp_candledata/datasource.py` downloads OHLCV candles via Yahoo Finance (`yfinance`)
+  or Upbit's public REST API depending on the incoming request.
+- Minute-resolution intervals (e.g. `1`, `5`, `15`) are mapped to the vendor-specific interval strings.
 - The module also exposes helpers for computing and formatting technical indicators.
 
 ## Schemas and indicator engine
@@ -19,7 +20,8 @@ The project exposes a Model Context Protocol (MCP) server that streams candle an
 
 ## Dependency management
 - Dependencies are declared in `pyproject.toml` and resolved with `uv`.
-- Core runtime dependencies: `modelcontextprotocol[http]`, `pydantic`, `pandas`, `yfinance`.
+- Core runtime dependencies: `modelcontextprotocol[http]`, `pydantic`, `pandas`,
+  `yfinance`, `httpx`.
 - Development tooling (formatting, linting) can be added later via `uv add --dev`.
 
 ## Execution flow
