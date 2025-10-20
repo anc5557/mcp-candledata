@@ -69,6 +69,7 @@ def fetch_and_prepare(request: CandleDataRequest) -> CandleDataResponse:
     return CandleDataResponse(
         symbol=request.symbol.upper(),
         interval_minutes=request.interval_minutes,
+        provider=request.provider,
         candles=candles,
         indicators=indicator_payload,
     )
@@ -103,6 +104,26 @@ def _download_candles(
     data = yf.download(symbol, **params)
     if data.empty:
         return data
+
+    # Handle MultiIndex columns (when yfinance returns multiple tickers or grouped data)
+    if isinstance(data.columns, pd.MultiIndex):
+        # Flatten MultiIndex columns - take the first level (OHLCV names)
+        data.columns = data.columns.get_level_values(0)
+    
+    # Ensure we have the expected OHLCV columns
+    expected_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+    if not all(col in data.columns for col in expected_columns[:4]):  # Volume might be missing
+        # Try alternative column names
+        column_mapping = {
+            'Adj Close': 'Close',
+            'Adj_Close': 'Close', 
+            'open': 'Open',
+            'high': 'High', 
+            'low': 'Low',
+            'close': 'Close',
+            'volume': 'Volume'
+        }
+        data = data.rename(columns=column_mapping)
 
     # The download may use a timezone-aware index. Convert to UTC to standardise.
     index = data.index

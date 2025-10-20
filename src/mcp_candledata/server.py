@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 from mcp.server.fastmcp import FastMCP
 
 from .datasource import CandleDataError, fetch_and_prepare
-from .schemas import CandleDataRequest
+from .schemas import CandleDataRequest, CandleDataResponse
 
 LOGGER = logging.getLogger("mcp_candledata")
 
@@ -18,16 +18,25 @@ mcp = FastMCP("mcp-candledata")
 
 
 @mcp.tool()
-async def get_candle_data(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """MCP tool handler invoked by the runtime."""
-    request = CandleDataRequest.model_validate(payload)
+async def get_candle_data(request: CandleDataRequest) -> CandleDataResponse:
+    """
+    Get stock/crypto price data and technical analysis indicators.
+    
+    Use this when users ask for:
+    - Stock prices (AAPL, TSLA, etc.) or crypto prices (BTC, ETH)
+    - Chart data, candlestick patterns, OHLCV data
+    - Technical indicators like RSI, MACD, moving averages
+    - Market analysis, price trends, trading signals
+    
+    Supports Yahoo Finance (stocks) and Upbit (Korean crypto exchange).
+    """
     try:
         result = await asyncio.to_thread(fetch_and_prepare, request)
     except CandleDataError as exc:
         LOGGER.exception("Failed to compute candle data")
         raise ValueError(str(exc)) from exc
 
-    return result.model_dump(mode="json")
+    return result
 
 
 def run(
